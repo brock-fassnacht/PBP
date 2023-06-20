@@ -7,64 +7,85 @@
 # Batting avg, batting avg vs lhp vs rhp, obp, w/ risp, Over season and last x amount of games
 # be able to filter by hitter(s) or pitcher
 
-pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
-
 library(shiny)
+library(data.table)
+
+
+pbp_data <- read.csv("C:\\Users\\BrocFassnacht\\OneDrive - Cobbs Creek Healthcare\\Desktop\\Training\\R Training\\GitR\\pbp2022.csv")
+
+
+last_p <- filter(pbp_data, last.pitch.of.ab == "true")
+
+last_p$hit <- ifelse(last_p$details.call.description == "Ball" | last_p$details.call.description == "Ball In Dirt" | last_p$details.call.description == "Hit By Pitch", 2, 
+                     ifelse(last_p$details.call.description=="In play, no out" | last_p$details.call.description == "In play, run(s)", 1,0))
+
+stats_of_int <- c("BA", "BA vs RHP", "BA vs LHP", "BA w/ risp", "OBP")
+
 
 ui <- fluidPage(
-  
-  # App Title
   titlePanel("Exploratory 2022 Batting Stats"),
-  
   sidebarLayout(
-    
     sidebarPanel(
+      selectInput("filter_col", "Column to Filter:", choices = c("home_team", "matchup.batter.id", "matchup.pitcher.id")),
+      textInput("filter_val", "Filter Value:"),
+      actionButton("apply_filter", "Apply Filter"),
       
-      selectInput(inputId = "Team",
-                  label = "Filter by: ",
-                  choices = c("Player", "Team", "League"),
-                  selected = "League"),
-      
-      
-      selectInput(inputId = "Stats",
-                  label = "Filter by: ",
-                  choices = c("BA", "BA vs RHP", "BA vs LHP", "BA w/ risp", "OBP"),
-                  selected = "BA"),
-      
-
-      selectInput(inputId = "Pitch",
-                label = "Filter by: ",
-                choices = c("ALL", "Fastball", "offspeed", "Changeup", "Slider", "Cutter", "Sinker", "Sweeper", "Splitter"),
-                selected = "ALL")
-    
-      ),
-    
+      #selectInput(inputId = "Pitch",
+       #           label = "Filter by: ",
+        #          choices = c("ALL", "Fastball", "offspeed", "Changeup", "Slider", "Cutter", "Sinker", "Sweeper", "Splitter"),
+         #         selected = "ALL")
+    ),
     mainPanel(
-      
-      plotOutput(outputId = "BA TABLE"),
-      textOutput("Number of observations")
-      
-       )
+      DT::dataTableOutput("summary_table")
     )
+  )
 )
 
-
-server <- function(input, output) {
-  output$textOutput <- renderText({
-    variable <- "World"
-    text <- paste("Hello", variable)
-    text
+# Server
+server <- function(input, output, session) {
+  # Store the raw data table as a reactive data frame
+  pbp <- reactive({
+    # Replace the filtering logic with your actual filter based on user inputs
+    last_p_filt <- last_p %>% 
+      filter(last_p[[input$filter_col]] == input$filter_val)
+    
+    return(last_p_filt)
+  })
+  
+  # Generate the summary table from the filtered raw data
+  dt <- reactive({
+    filtered_data <- pbp()
+    
+    # Replace with your code to calculate the summary table
+    summary_table <- data.table(
+      Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "OBP"),
+      output = c(
+        mean(filtered_data$hit != 2), # BA
+        mean(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "R"), # BA vs. RHP
+        mean(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "L"), # BA vs. LHP
+        mean(filtered_data$hit != 2 & filtered_data$matchup.splits.menOnBase == "RISP"), # BA w RISP
+        sum(filtered_data$hit != 0) / length(filtered_data$hit) # OBP
+      ),
+      Obvs = c(
+        length(filtered_data$hit != 2),
+        length(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "R"),
+        length(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "L"),
+        length(filtered_data$hit != 2 & filtered_data$matchup.splits.menOnBase == "RISP"),
+        length(filtered_data$hit)
+      )
+    )
+    
+    return(summary_table)
+  })
+  
+  # Render the summary table using DT::renderDataTable()
+  output$summary_table <- DT::renderDataTable({
+    dt()
   })
 }
 
-View(filter(pbp_data, last.pitch.of.ab == "true"))
-
-
-pbp_data[,c()]
-
-
-
-
+# Run the app
+shinyApp(ui = ui, server = server)
 ## intermediate - pbp
 
 # first pitch data, after how many at bats are pitchers less effective

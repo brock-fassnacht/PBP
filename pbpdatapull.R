@@ -8,7 +8,7 @@ library(dplyr)
 
 ## finding first and last gamepks of 2022 season
 
-opening_day <- as.Date("2022-04-07")
+opening_day <- as.Date("2022-10-28")
 closing_day <- as.Date("2022-11-05")
 
 game_pk_list_2022 <- list()
@@ -54,10 +54,11 @@ for (x in 2:length(game_pk_list_2022)){
 
 copy1 <- initial_df
 
+# Making game pick an integer
 copy1$game_pk <- as.integer(unlist(copy1$game_pk))
 
 #Creating local copy of data
-write.csv(copy1, "C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
+write.csv(copy1, "C:\\Users\\BrocFassnacht\\OneDrive - Cobbs Creek Healthcare\\Desktop\\Training\\R Training\\GitR\\pbp2022.csv")
 
 
 
@@ -66,7 +67,7 @@ write.csv(copy1, "C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data B
 
 ## Strikezone Graph
 
-ggplot(inital_df, aes(pitchData.coordinates.x, pitchData.coordinates.y, color=factor(details.isBall))) + geom_point() +
+ggplot(copy1, aes(pitchData.coordinates.x, pitchData.coordinates.y, color=factor(details.isBall))) + geom_point() +
     labs(title = "Strikezone", x="X", y="Y") + scale_color_manual(values = c("red", "green"))
 
 
