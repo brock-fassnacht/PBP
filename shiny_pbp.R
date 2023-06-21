@@ -8,11 +8,12 @@
 # be able to filter by hitter(s) or pitcher
 
 library(shiny)
+library(ggplot2)
+library(DT)
+library(dplyr)
 library(data.table)
 
-
-pbp_data <- read.csv("C:\\Users\\BrocFassnacht\\OneDrive - Cobbs Creek Healthcare\\Desktop\\Training\\R Training\\GitR\\pbp2022.csv")
-
+pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
 
 last_p <- filter(pbp_data, last.pitch.of.ab == "true")
 
@@ -23,69 +24,67 @@ stats_of_int <- c("BA", "BA vs RHP", "BA vs LHP", "BA w/ risp", "OBP")
 
 
 ui <- fluidPage(
-  titlePanel("Exploratory 2022 Batting Stats"),
-  sidebarLayout(
-    sidebarPanel(
-      selectInput("filter_col", "Column to Filter:", choices = c("home_team", "matchup.batter.id", "matchup.pitcher.id")),
-      textInput("filter_val", "Filter Value:"),
-      actionButton("apply_filter", "Apply Filter"),
-      
-      #selectInput(inputId = "Pitch",
-       #           label = "Filter by: ",
-        #          choices = c("ALL", "Fastball", "offspeed", "Changeup", "Slider", "Cutter", "Sinker", "Sweeper", "Splitter"),
-         #         selected = "ALL")
+  titlePanel("Hitting Stats Table"),
+  
+  # Create a new Row in the UI for selectInputs
+  fluidRow(
+    column(4,
+           selectInput("Pitch",
+                       "Pitch:",
+                       c("All",
+                         unique(as.character(last_p$details.type.description))))
     ),
-    mainPanel(
-      DT::dataTableOutput("summary_table")
+    column(4,
+           selectInput("Home",
+                       "Home_team:",
+                       c("All",
+                         unique(as.character(last_p$home_team))))
     )
-  )
+  ),
+  # Create a new row for the table.
+  DT::dataTableOutput("table")
 )
 
-# Server
-server <- function(input, output, session) {
-  # Store the raw data table as a reactive data frame
-  pbp <- reactive({
-    # Replace the filtering logic with your actual filter based on user inputs
-    last_p_filt <- last_p %>% 
-      filter(last_p[[input$filter_col]] == input$filter_val)
-    
-    return(last_p_filt)
-  })
+server <- function(input, output) {
   
-  # Generate the summary table from the filtered raw data
-  dt <- reactive({
-    filtered_data <- pbp()
+  # Filter data based on selections
+  output$table <- DT::renderDataTable(DT::datatable({
+    filtered_data <- last_p
+    if (input$Pitch != "All") {
+      filtered_data <- filtered_data[filtered_data$details.type.description == input$Pitch,]
+    }
+    if (input$Home != "All") {
+      filtered_data <- filtered_data[filtered_data$home_team == input$Home,]
+    }
     
-    # Replace with your code to calculate the summary table
+    
     summary_table <- data.table(
       Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "OBP"),
       output = c(
-        mean(filtered_data$hit != 2), # BA
-        mean(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "R"), # BA vs. RHP
-        mean(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "L"), # BA vs. LHP
-        mean(filtered_data$hit != 2 & filtered_data$matchup.splits.menOnBase == "RISP"), # BA w RISP
+        sum(filtered_data$hit == 1)/sum(filtered_data$hit <= 1), # BA
+        sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1), # BA vs. RHP
+        sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1), # BA vs. LHP
+        sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit <= 1), # BA w RISP
         sum(filtered_data$hit != 0) / length(filtered_data$hit) # OBP
       ),
       Obvs = c(
-        length(filtered_data$hit != 2),
-        length(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "R"),
-        length(filtered_data$hit != 2 & filtered_data$matchup.pitchHand.code == "L"),
-        length(filtered_data$hit != 2 & filtered_data$matchup.splits.menOnBase == "RISP"),
+        sum(filtered_data$hit <= 1),
+        sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1),
+        sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1),
+        sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP",]$hit <= 1),
         length(filtered_data$hit)
       )
     )
-    
-    return(summary_table)
-  })
+    summary_table
+  }))
   
-  # Render the summary table using DT::renderDataTable()
-  output$summary_table <- DT::renderDataTable({
-    dt()
-  })
 }
 
-# Run the app
 shinyApp(ui = ui, server = server)
+
+
+
+
 ## intermediate - pbp
 
 # first pitch data, after how many at bats are pitchers less effective
@@ -99,9 +98,8 @@ shinyApp(ui = ui, server = server)
 # maybe build an algorithm that shows optimal pitch to be thrown given inputs
 
 
+last_p[matchup.pitchHand.code == "R",]
 
-
-
-library(shiny)
+View(last_p)
 
 runExample("01_hello")
