@@ -52,7 +52,16 @@ ui <- fluidPage(
   DT::dataTableOutput("table")
 )
 
-server <- function(input, output) {
+server <- function(input, output, session) {
+  
+  observeEvent(input$Home, {
+    home_team <- input$Home
+    batters <- unique(as.character(last_p[last_p$hitting_team == home_team, "matchup.batter.fullName"]))
+    updateSelectInput(session, "Batter", 
+                      choices = c("ALL", batters))
+    
+  })
+  
   
   # Filter data based on selections
   output$table <- DT::renderDataTable(DT::datatable({
@@ -67,7 +76,10 @@ server <- function(input, output) {
       filtered_data <- filtered_data[filtered_data$details.type.description == input$Pitch,]
     }
     
-    #team_player_list <- ifelse(input$Home != "All", unique(as.character(last_p[last_p$hitting_team == input$Home])),unique(as.character(last_p$matchup.batter.fullName)))
+    
+    
+    
+    
     
     summary_table <- data.table(
       Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "OBP"),
