@@ -13,7 +13,7 @@ library(DT)
 library(dplyr)
 library(data.table)
 
-pbp_data <- read.csv("C:\\Users\\BrocFassnacht\\OneDrive - Cobbs Creek Healthcare\\Desktop\\Training\\R Training\\GitR\\pbp2022.csv")
+pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
 last_p <- filter(pbp_data, last.pitch.of.ab == "true")
 
 last_p$hit <- ifelse(last_p$details.call.description == "Ball" | last_p$details.call.description == "Ball In Dirt" | last_p$details.call.description == "Hit By Pitch", 2, 
@@ -49,7 +49,8 @@ ui <- fluidPage(
     )
   ),
   # Create a new row for the table.
-  DT::dataTableOutput("table")
+  DT::dataTableOutput("table"),
+  plotOutput("plott")
 )
 
 server <- function(input, output, session) {
@@ -99,9 +100,22 @@ server <- function(input, output, session) {
       )
     )
     summary_table
+    
   }))
   
-}
+  output$plott <- renderPlot({
+    filtered_data2 <- last_p
+    if (input$Home != "All") {
+      filtered_data2 <- filtered_data2[filtered_data2$hitting_team == input$Home,]
+    }
+    if (input$Batter != "All") {
+      filtered_data2 <- filtered_data2[filtered_data2$matchup.batter.fullName == input$Batter,]
+    }
+    
+    ggplot(filtered_data2, aes(details.type.description)) + geom_bar(aes(fill = matchup.pitchHand.code))
+
+    })
+      }
 
 shinyApp(ui = ui, server = server)
 
