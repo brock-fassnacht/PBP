@@ -14,12 +14,14 @@ library(dplyr)
 library(data.table)
 
 pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
+
+
+pbp_data$hit <- ifelse(pbp_data$details.call.description == "Ball" | pbp_data$details.call.description == "Ball In Dirt" | pbp_data$details.call.description == "Hit By Pitch", 2, 
+                     ifelse(pbp_data$details.call.description=="In play, no out" | pbp_data$details.call.description == "In play, run(s)", 1,0))
+
+pbp_data$hitting_team <- ifelse(pbp_data$about.isTopInning, pbp_data$away_team, pbp_data$home_team)
+
 last_p <- filter(pbp_data, last.pitch.of.ab == "true")
-
-last_p$hit <- ifelse(last_p$details.call.description == "Ball" | last_p$details.call.description == "Ball In Dirt" | last_p$details.call.description == "Hit By Pitch", 2, 
-                     ifelse(last_p$details.call.description=="In play, no out" | last_p$details.call.description == "In play, run(s)", 1,0))
-
-last_p$hitting_team <- ifelse(last_p$about.isTopInning, last_p$away_team, last_p$home_team)
 
 stats_of_int <- c("BA", "BA vs RHP", "BA vs LHP", "BA w/ risp", "OBP")
 
@@ -58,9 +60,10 @@ server <- function(input, output, session) {
   observeEvent(input$Home, {
     home_team <- input$Home
     batters <- unique(as.character(last_p[last_p$hitting_team == home_team, "matchup.batter.fullName"]))
-    updateSelectInput(session, "Batter", 
-                      choices = c("ALL", batters))
-    
+    if ("All" %in% batters) {
+      batters <- setdiff(batters, "All")
+    }
+    updateSelectInput(session, "Batter", choices = c("All", batters))
   })
   
   
@@ -84,12 +87,12 @@ server <- function(input, output, session) {
     
     summary_table <- data.table(
       Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "OBP"),
-      output = c(
-        sum(filtered_data$hit == 1)/sum(filtered_data$hit <= 1), # BA
-        sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1), # BA vs. RHP
-        sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1), # BA vs. LHP
-        sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit <= 1), # BA w RISP
-        sum(filtered_data$hit != 0) / length(filtered_data$hit) # OBP
+      Avg. = c(
+        round(sum(filtered_data$hit == 1)/sum(filtered_data$hit <= 1),3), # BA
+        round(sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
+        round(sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
+        round(sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
+        round(sum(filtered_data$hit != 0) / length(filtered_data$hit),3) # OBP
       ),
       At_Bats = c(
         sum(filtered_data$hit <= 1),
@@ -104,7 +107,7 @@ server <- function(input, output, session) {
   }))
   
   output$plott <- renderPlot({
-    filtered_data2 <- last_p
+    filtered_data2 <- pbp_data
     if (input$Home != "All") {
       filtered_data2 <- filtered_data2[filtered_data2$hitting_team == input$Home,]
     }
@@ -112,7 +115,8 @@ server <- function(input, output, session) {
       filtered_data2 <- filtered_data2[filtered_data2$matchup.batter.fullName == input$Batter,]
     }
     
-    ggplot(filtered_data2, aes(details.type.description)) + geom_bar(aes(fill = matchup.pitchHand.code))
+    ggplot(filtered_data2, aes(details.type.description)) + geom_bar(aes(fill = matchup.pitchHand.code)) +
+      xlab("Pitch") + ylab("Number of Pitches") + labs(fill="Pitching Hand")
 
     })
       }
