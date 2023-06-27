@@ -6,9 +6,9 @@ library(dplyr)
 ## Initial Data pull
 
 
-## finding first and last gamepks of 2022 season
+## finding all of the gamepks(ids) of 2022 season *They are not in order
 
-opening_day <- as.Date("2022-10-28")
+opening_day <- as.Date("2022-04-07")
 closing_day <- as.Date("2022-11-05")
 
 game_pk_list_2022 <- list()
@@ -31,7 +31,7 @@ for (d in 1:length(date_range)){
 
 initial_df <- mlb_pbp(game_pk = game_pk_list_2022[1])
 
-needed_cols <- c("game_pk", "game_date", "pitchNumber","result.rbi", "result.awayScore", "result.homeScore", "details.call.description", "count.strikes.x", "count.balls.x", "count.outs.x","last.pitch.of.ab", "matchup.splits.menOnBase", "pitchData.coordinates.x", "pitchData.coordinates.y", "hitData.hardness", "about.inning", "matchup.batSide.code", "matchup.pitchHand.code", "matchup.batter.id", "matchup.pitcher.id", "home_team", "away_team", "details.type.description", "pitchData.startSpeed", "pitchData.zone","pitchData.breaks.breakLength", "pitchData.breaks.spinRate", "details.isBall","matchup.batter.fullName", "about.isTopInning")
+needed_cols <- c("game_pk", "game_date", "pitchNumber","result.rbi", "result.awayScore", "result.homeScore", "details.call.description", "count.strikes.x", "count.balls.x", "count.outs.x","last.pitch.of.ab", "matchup.splits.menOnBase", "pitchData.coordinates.x", "pitchData.coordinates.y", "hitData.hardness", "about.inning", "matchup.batSide.code", "matchup.pitchHand.code", "matchup.batter.id", "matchup.pitcher.id", "home_team", "away_team", "details.type.description", "pitchData.startSpeed", "pitchData.zone","pitchData.breaks.breakLength", "pitchData.breaks.spinRate", "details.isBall","matchup.batter.fullName", "hitData.launchSpeed", "hitData.totalDistance", "about.isTopInning", "atBatIndex", "result.eventType")
 initial_df <- subset(initial_df, type=="pitch")[,needed_cols]
 
 miss_count = 0

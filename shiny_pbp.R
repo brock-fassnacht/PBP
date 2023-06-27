@@ -18,6 +18,12 @@ library(lubridate)
 
 pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
 
+
+# Filtering out all star game
+pbp_data$hitting_team <- ifelse(pbp_data$about.isTopInning, pbp_data$away_team, pbp_data$home_team)
+
+pbp_data <- pbp_data[pbp_data$hitting_team != "American League All-Stars" | pbp_data$hitting_team != "National League All-Stars",]
+
 #extracting days since today
 pbp_data$game_date <- as.Date(pbp_data$game_date) - 1
 
@@ -28,20 +34,31 @@ closing_day <- max(pbp_data$game_date)
 
 pbp_data$week2 <- floor((pbp_data$game_date - opening_day)/14)
 
-# setting walks as 2, hits as 1 and outs as 0
-pbp_data$hit <- ifelse(pbp_data$details.call.description == "Ball" | pbp_data$details.call.description == "Ball In Dirt" | pbp_data$details.call.description == "Hit By Pitch", 2, 
-                     ifelse(pbp_data$details.call.description=="In play, no out" | pbp_data$details.call.description == "In play, run(s)", 1,0))
+# Changing 4 seam fastballs to just fastballs
 
-pbp_data$hitting_team <- ifelse(pbp_data$about.isTopInning, pbp_data$away_team, pbp_data$home_team)
+pbp_data$details.type.description[pbp_data$details.type.description == "Four-Seam Fastball"] <- "Fastball"
+  
+  
+# setting walks as 2, hits as 1 and outs as 0
+pbp_data$hit <- ifelse(pbp_data$result.eventType %in% c("single", "double", "triple", "home_run"), 1,
+                              ifelse(pbp_data$result.eventType %in% c("walk","wild_pitch"), 2, 0))
+
+
+pbp_data$bases <- ifelse(pbp_data$result.eventType == "single", 1,
+                         ifelse(pbp_data$result.eventType == "double", 2,
+                                ifelse(pbp_data$result.eventType == "triple", 3,
+                                       ifelse(pbp_data$result.eventType == "home_run",4,0))))
 
 # dataframe where only last pitch of each at bat is captured (to calculate batting averages)
 last_p <- filter(pbp_data, last.pitch.of.ab == "true")
+
+
 
 stats_of_int <- c("BA", "BA vs RHP", "BA vs LHP", "BA w/ risp", "OBP")
 
 
 ui <- fluidPage(
-  titlePanel("Hitting Stats Table"),
+  titlePanel("Hitter Analysis Chart"),
   
   # Create a new Row in the UI for selectInputs
   fluidRow(
@@ -49,19 +66,19 @@ ui <- fluidPage(
            selectInput("Home",
                        "Hitting Team:",
                        c("All",
-                         unique(as.character(last_p$hitting_team))))
+                         sort(unique(as.character(last_p$hitting_team)))))
     ),
     column(3,
            selectInput("Batter",
                        "Batter:",
                        c("All",
-                         unique(as.character(last_p$matchup.batter.fullName))))
+                         sort(unique(as.character(last_p$matchup.batter.fullName)))))
     ),
     column(3,
            selectInput("Pitch",
                        "Pitch (last of at bat):",
                        c("All",
-                         unique(as.character(last_p$details.type.description))))
+                         sort(unique(as.character(last_p$details.type.description)))))
     ),
     column(3,
            dateRangeInput("daterange",
@@ -110,28 +127,44 @@ server <- function(input, output, session) {
       filtered_data <- filtered_data[filtered_data$details.type.description == input$Pitch,]
     }
     
+    # Table for pitches seen overall
+    pseen <- last_p %>%
+      group_by(game_pk, matchup.batter.fullName, atBatIndex) %>%
+      summarize(Pitches_seen=max(pitchNumber))
+    
+    # Dynamic table for pitches seen
+    pseen_filt <- filtered_data %>%
+      group_by(game_pk, matchup.batter.fullName, atBatIndex) %>%
+      summarize(Pitches_seen=max(pitchNumber), abs = n())
+    
     #summary table based on filtered data from the inputs
     summary_table <- data.table(
-      Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "OBP"),
+      Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "SLUG", "OBP", "Pitches Seen per ab"),
       MLB_avg = c(
         round(sum(last_p2$hit == 1)/sum(last_p2$hit <= 1),3), # BA
         round(sum(last_p2[last_p$matchup.pitchHand.code == "R",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
         round(sum(last_p2[last_p$matchup.pitchHand.code == "L",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
         round(sum(last_p2[last_p$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(last_p2[last_p$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
-        round(sum(last_p2$hit != 0) / length(last_p2$hit),3) # OBP
+        round(sum(last_p$bases)/sum(last_p2$hit <= 1),3),#SLUG
+        round(sum(last_p2$hit != 0) / length(last_p2$hit),3),# OBP
+        round(mean(pseen$Pitches_seen),3) #pitches seen
       ),
       Avg. = c(
         round(sum(filtered_data$hit == 1)/sum(filtered_data$hit <= 1),3), # BA
         round(sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
         round(sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit == 1)/sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
         round(sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
-        round(sum(filtered_data$hit != 0) / length(filtered_data$hit),3) # OBP
+        round(sum(filtered_data$bases)/sum(filtered_data$hit <= 1),3),
+        round(sum(filtered_data$hit != 0) / length(filtered_data$hit),3), # OBP   
+        round(mean(pseen_filt$Pitches_seen),3)
       ),
       At_Bats = c(
         sum(filtered_data$hit <= 1),
         sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1),
         sum(filtered_data[filtered_data$matchup.pitchHand.code == "L",]$hit <= 1),
         sum(filtered_data[filtered_data$matchup.splits.menOnBase == "RISP" | filtered_data$matchup.splits.menOnBase == "Loaded",]$hit <= 1),
+        sum(filtered_data$hit <= 1),
+        length(filtered_data$hit),
         length(filtered_data$hit)
       )
     )
@@ -229,8 +262,8 @@ runExample("01_hello")
 
 
 averages <- last_p %>%
-  group_by(game_pk, matchup.batter.fullName ,atBatIndex) %>%
-  summarize(total_hits=sum(hit), abs = n())
+  group_by(game_pk, matchup.batter.fullName, atBatIndex) %>%
+  summarize(Pitches_seen=max(pitchNumber), abs = n())
 
 averages$batting_avg <- averages$total_hits/averages$abs
 
