@@ -9,6 +9,10 @@
 
 # What pitches a batter swings and misses at, swings out of the zone for, hits the best etc.
 
+
+
+
+###
 library(shiny)
 library(ggplot2)
 library(DT)
@@ -142,9 +146,9 @@ server <- function(input, output, session) {
       Stat = c("BA", "BA vs. RHP", "BA vs. LHP", "BA w RISP", "SLUG", "OBP", "Pitches Seen per ab"),
       MLB_avg = c(
         round(sum(last_p2$hit == 1)/sum(last_p2$hit <= 1),3), # BA
-        round(sum(last_p2[last_p$matchup.pitchHand.code == "R",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
-        round(sum(last_p2[last_p$matchup.pitchHand.code == "L",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
-        round(sum(last_p2[last_p$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(last_p2[last_p$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
+        round(sum(last_p2[last_p2$matchup.pitchHand.code == "R",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
+        round(sum(last_p2[last_p2$matchup.pitchHand.code == "L",]$hit == 1)/sum(last_p2[last_p$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
+        round(sum(last_p2[last_p2$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(last_p2[last_p$matchup.splits.menOnBase == "RISP" | last_p2$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
         round(sum(last_p$bases)/sum(last_p2$hit <= 1),3),#SLUG
         round(sum(last_p2$hit != 0) / length(last_p2$hit),3),# OBP
         round(mean(pseen$Pitches_seen),3) #pitches seen
@@ -259,6 +263,14 @@ View(last_p)
 
 runExample("01_hello")
 
+
+swing_type <- pbp_data[pbp_data$details.call.description == "Swinging Strike"]
+
+
+
+hits_best <- pbp_data %>%
+  group_by(matchup.batter.fullName, matchup.pitchHand.code, details.type.description) %>%
+  summarize()
 
 
 averages <- last_p %>%
