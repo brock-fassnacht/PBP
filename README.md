@@ -9,7 +9,7 @@ Note: The pulling of the data can take hours, especially when pulling a whole se
 
 
 The shiny_pbp is the main app where it uses the pbp_data and filters it to draw simple analytics for team/batter data. 
-There are six made custom input filters that based on the inputs adjust a table and two graphs.
+There are six made custom filters that based on the inputs, adjust a table and two graphs.
 
 In the strike_predictor app I built a simple knn model using x and y coordinates to predict what is actually a strike. 
 We can then define a strike zone and do further hitter analysis from this.
