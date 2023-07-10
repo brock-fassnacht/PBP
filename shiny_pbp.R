@@ -8,9 +8,8 @@
 # be able to filter by hitter(s) or pitcher
 
 # What pitches a batter swings and misses at, swings out of the zone for, hits the best etc.
-
-
-
+# Turn batting average graph into lagging average. instead of grouped by 15 game groups
+# MAke pitcher filter to see what pitches/ averages are based on pitcher/team. Cant include linegraph
 
 ###
 library(shiny)
@@ -19,12 +18,15 @@ library(DT)
 library(dplyr)
 library(data.table)
 library(lubridate)
+library(forcats)
+library(zoo)
 
-pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022.csv")
+pbp_data <- read.csv("C:\\Users\\bfass\\OneDrive\\Desktop\\CS\\Misc\\Baseball Data Bowl\\Pitchproj\\pbp2022upd.csv")
 
 
 # Filtering out all star game
 pbp_data$hitting_team <- ifelse(pbp_data$about.isTopInning, pbp_data$away_team, pbp_data$home_team)
+pbp_data$pitching_team <- ifelse(pbp_data$about.isTopInning, pbp_data$home_team, pbp_data$away_team)
 
 pbp_data <- pbp_data[pbp_data$hitting_team != "American League All-Stars" | pbp_data$hitting_team != "National League All-Stars",]
 
@@ -54,7 +56,14 @@ pbp_data$bases <- ifelse(pbp_data$result.eventType == "single", 1,
                                        ifelse(pbp_data$result.eventType == "home_run",4,0))))
 
 # dataframe where only last pitch of each at bat is captured (to calculate batting averages)
-last_p <- filter(pbp_data, last.pitch.of.ab == "true")
+
+# Need to create a new column for last pitch of at bat because last.pitch.of.ab has a lot of null values
+pbp_data <- pbp_data %>%
+  group_by(game_pk, atBatIndex) %>%
+  mutate(max_pitch = pitchNumber == max(pitchNumber))
+
+
+last_p <- filter(pbp_data, max_pitch == TRUE)
 
 
 
@@ -90,6 +99,22 @@ ui <- fluidPage(
                           start = min(last_p$game_date), max(last_p$game_date)
            )
   )),
+  titlePanel("Hitting Vs."),
+  
+  fluidRow(
+    column(3,
+           selectInput("VsTeam",
+                       "Pitching Team:",
+                       c("All",
+                         sort(unique(as.character(last_p$pitching_team)))))
+    ),
+    column(3,
+           selectInput("VsPitch",
+                       "Opposing Pitcher(need to recollect data):",
+                       c("All",
+                         sort(unique(as.character(last_p$matchup.batter.fullName)))))
+    ),
+  ),
   # Create a new row for the table
   DT::dataTableOutput("table"),
   # New row with both plots on same row
@@ -110,7 +135,8 @@ server <- function(input, output, session) {
   observeEvent(input$Home, {
     home_team <- input$Home
     last_p <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2],]
-    batters <- unique(as.character(last_p[last_p$hitting_team == home_team, "matchup.batter.fullName"]))
+    
+    batters <- unique(last_p[last_p$hitting_team == home_team, "matchup.batter.fullName"])
     if ("All" %in% batters) {
       batters <- setdiff(batters, "All")
     }
@@ -119,7 +145,7 @@ server <- function(input, output, session) {
   
   # Filter data based on selections
   output$table <- DT::renderDataTable(DT::datatable({
-    filtered_data <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2],]
+    filtered_data <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2],] #basic team hitting stats
     last_p2 <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2],]
     if (input$Home != "All") {
       filtered_data <- filtered_data[filtered_data$hitting_team == input$Home,]
@@ -130,6 +156,16 @@ server <- function(input, output, session) {
     if (input$Pitch != "All") {
       filtered_data <- filtered_data[filtered_data$details.type.description == input$Pitch,]
     }
+    
+    filtered_data_vs <- filtered_data # Creating a copy for hitting vs opponents
+    
+    if (input$VsTeam != "All") {
+      filtered_data_vs <- filtered_data[filtered_data$pitching_team == input$VsTeam,]
+    }
+    if (input$VsPitch != "All") {
+      filtered_data_vs <- filtered_data_vs #[filtered_data$details.type.description == input$Pitch,] Data needs to be collected
+    }
+    
     
     # Table for pitches seen overall
     pseen <- last_p %>%
@@ -162,6 +198,15 @@ server <- function(input, output, session) {
         round(sum(filtered_data$hit != 0) / length(filtered_data$hit),3), # OBP   
         round(mean(pseen_filt$Pitches_seen),3)
       ),
+      Avg_vs_Selected = c(
+        round(sum(filtered_data_vs$hit == 1)/sum(filtered_data_vs$hit <= 1),3), # BA
+        round(sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "R",]$hit == 1)/sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "R",]$hit <= 1),3), # BA vs. RHP
+        round(sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "L",]$hit == 1)/sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "L",]$hit <= 1),3), # BA vs. LHP
+        round(sum(filtered_data_vs[filtered_data_vs$matchup.splits.menOnBase == "RISP" | filtered_data_vs$matchup.splits.menOnBase == "Loaded",]$hit == 1)/sum(filtered_data_vs[filtered_data_vs$matchup.splits.menOnBase == "RISP" | filtered_data_vs$matchup.splits.menOnBase == "Loaded",]$hit <= 1),3), # BA w RISP
+        round(sum(filtered_data_vs$bases)/sum(filtered_data_vs$hit <= 1),3),
+        round(sum(filtered_data_vs$hit != 0) / length(filtered_data_vs$hit),3), # OBP   
+        round(mean(pseen_filt$Pitches_seen),3)
+      ),
       At_Bats = c(
         sum(filtered_data$hit <= 1),
         sum(filtered_data[filtered_data$matchup.pitchHand.code == "R",]$hit <= 1),
@@ -170,6 +215,15 @@ server <- function(input, output, session) {
         sum(filtered_data$hit <= 1),
         length(filtered_data$hit),
         length(filtered_data$hit)
+      ),
+      At_Bats_vs_Selected = c(
+        sum(filtered_data_vs$hit <= 1),
+        sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "R",]$hit <= 1),
+        sum(filtered_data_vs[filtered_data_vs$matchup.pitchHand.code == "L",]$hit <= 1),
+        sum(filtered_data_vs[filtered_data_vs$matchup.splits.menOnBase == "RISP" | filtered_data_vs$matchup.splits.menOnBase == "Loaded",]$hit <= 1),
+        sum(filtered_data_vs$hit <= 1),
+        length(filtered_data_vs$hit),
+        length(filtered_data_vs$hit)
       )
     )
     summary_table
@@ -186,13 +240,17 @@ server <- function(input, output, session) {
     if (input$Batter != "All") {
       filtered_data2 <- filtered_data2[filtered_data2$matchup.batter.fullName == input$Batter,]
     }
+    if (input$VsTeam != "All") {
+      filtered_data2 <- filtered_data2[filtered_data2$pitching_team == input$VsTeam,]
+    }
     
-    ggplot(filtered_data2, aes(details.type.description)) + geom_bar(aes(fill = matchup.pitchHand.code)) +
-      xlab("Pitch") + ylab("Number of Pitches") + labs(fill="Pitching Hand")
 
+    ggplot(filtered_data2, aes(fct_infreq(as.factor(details.type.description)), fill = matchup.pitchHand.code, weight = ..count..)) +
+      geom_bar() +
+      xlab("Pitches Seen") + ylab("Number of Pitches") + labs(fill = "Pitching Hand")
     })
   
-  # plots batting average over course of the season. is grouped by every 10 days
+  # plots batting average over course of the season. is grouped by every 14 days
   output$lineplot <- renderPlot({
     averages <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2] & last_p$hit <= 1,] %>%
       group_by(week2, matchup.batter.fullName, hitting_team) %>%
@@ -279,4 +337,18 @@ averages <- last_p %>%
 
 averages$batting_avg <- averages$total_hits/averages$abs
 
+team_averages <- last_p %>%
+  group_by(game_pk, hitting_team) %>%
+  summarize(average_bygm = mean(hit), na.rm = TRUE)
 
+player_averages <- last_p %>%
+  group_by(game_pk, matchup.batter.fullName) %>%
+  summarize(average_bygm = mean(hit), na.rm = TRUE)
+
+player_averages <- last_p[last_p$hit <= 1,] %>%
+  group_by(matchup.batter.fullName) %>%
+  rollmean(hit, 40, fill="roll")
+
+team_averages <- last_p[last_p$hit <= 1,] %>%
+  group_by(hitting_team) %>%
+  mutate(ba_rollmean = rollmean(hit, 400, fill = NA, align = "right", na.rm = TRUE))
