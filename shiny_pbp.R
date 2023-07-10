@@ -252,46 +252,47 @@ server <- function(input, output, session) {
   
   # plots batting average over course of the season. is grouped by every 14 days
   output$lineplot <- renderPlot({
-    averages <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2] & last_p$hit <= 1,] %>%
-      group_by(week2, matchup.batter.fullName, hitting_team) %>%
-      summarize(total_hits=sum(hit), abs = n())
+    averages <- last_p[last_p$game_date >= input$daterange[1] & last_p$game_date <= input$daterange[2] & last_p$hit <= 1,] 
     
-    leag_avgs <- averages %>%
-      group_by(week2) %>%
-      summarize(total_hits=sum(total_hits), abs = sum(abs))
+    leag_avgs <- averages
+    leag_avgs$rolling_avg <- rollmean(leag_avgs$hit, 10000, fill = NA, align = "right", na.rm = TRUE)
+    leag_avgs <- leag_avgs %>%
+      group_by(game_date) %>%
+      summarize(rollba=mean(rolling_avg))
     
-    leag_avgs$batting_avg <- leag_avgs$total_hits/leag_avgs$abs
     
     if (input$Batter != "All") {
       averages <- averages[averages$matchup.batter.fullName == input$Batter,]
-      averages$batting_avg <- averages$total_hits/averages$abs
       
-      ggplot(averages) + geom_line(aes(x = week2, y=batting_avg, colour = "Selected Avg"), size=1) +
-        geom_line(data = leag_avgs, aes(x = week2, y=batting_avg, colour = "League Avg"), size=1) +
+      play_avgs <- averages
+      play_avgs$rolling_avg <- rollmean(play_avgs$hit, 30, fill = NA, align = "right", na.rm = TRUE)
+      play_avgs <- play_avgs %>%
+        group_by(game_date) %>%
+        summarize(rollba=mean(rolling_avg))
+      
+      ggplot(play_avgs) + geom_line(aes(x = game_date, y=rollba, colour = "Selected Avg"), size=1) +
+        geom_line(data = leag_avgs, aes(x = game_date, y=rollba, colour = "League Avg"), size=1) +
         labs(x = "Date", y = "Batting avg") + scale_color_manual(name = "Legend", values = c("Selected Avg" = "red", "League Avg" = "darkblue")) +
-        theme_minimal() +
-        scale_x_continuous(breaks = unique(averages$week2))
+        theme_minimal()
       
     }else if (input$Home != "All") {
       averages <- averages[averages$hitting_team == input$Home,]
       
-      averages <- averages %>%
-        group_by(week2, hitting_team) %>%
-        summarize(total_hits=sum(total_hits), abs = sum(abs))
+      team_avgs <- averages
+      team_avgs$rolling_avg <- rollmean(team_avgs$hit, 300, fill = NA, align = "right", na.rm = TRUE)
+      team_avgs <- team_avgs %>%
+        group_by(game_date) %>%
+        summarize(rollba=mean(rolling_avg))
       
-      averages$batting_avg <- averages$total_hits/averages$abs
-      
-      ggplot(averages) + geom_line(aes(x = week2, y=batting_avg, colour = "Selected Avg"), size=1) +
-        geom_line(data = leag_avgs, aes(x = week2, y=batting_avg, colour = "League Avg"), size=1) +
+      ggplot(team_avgs) + geom_line(aes(x = game_date, y=rollba, colour = "Selected Avg"), size=1) +
+        geom_line(data = leag_avgs, aes(x = game_date, y=rollba, colour = "League Avg"), size=1) +
         labs(x = "Date", y = "Batting avg") + scale_color_manual(values = c("Selected Avg" = "red", "League Avg" = "darkblue")) +
-        theme_minimal() +
-        scale_x_continuous(breaks = unique(averages$week2))
+        theme_minimal() 
       
     } else {
       
-      ggplot(leag_avgs) + geom_line(aes(x = week2, y=batting_avg), color="blue") + 
-        labs(x = "Date", y = "Batting avg") + theme_minimal() +
-        scale_x_continuous(breaks = unique(averages$week2))
+      ggplot(leag_avgs) + geom_line(aes(x = game_date, y=rollba), color="blue") + 
+        labs(x = "Date", y = "Batting avg") + theme_minimal() 
     }
     
   })
@@ -313,6 +314,21 @@ shinyApp(ui = ui, server = server)
 # combinations of pitches that are most effective (2/3)
 # adjustment of speed (is fastest always best, or a difference of speed)
 # maybe build an algorithm that shows optimal pitch to be thrown given inputs
+
+
+
+
+
+leag_avgs <- last_p[last_p$hit <= 1,]
+leag_avgs$rolling_avg <- rollmean(leag_avgs$hit, 10000, fill = NA, align = "right", na.rm = TRUE)
+leag_avgs <- leag_avgs %>%
+  group_by(game_date) %>%
+  summarize(rollba=mean(rolling_avg))
+
+ggplot(leag_avgs) + geom_line(aes(x = game_date, y=rollba), color="blue") + 
+  labs(x = "Date", y = "Batting avg") + theme_minimal() 
+
+
 
 
 last_p[matchup.pitchHand.code == "R",]
