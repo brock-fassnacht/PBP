@@ -40,11 +40,13 @@ closing_day <- max(pbp_data$game_date)
 
 pbp_data$week2 <- floor((pbp_data$game_date - opening_day)/14)
 
-# Changing 4 seam fastballs to just fastballs
+#Generalized pitch description
+pbp_data$gen_pitch_desc <- ifelse(pbp_data$details.type.description %in% c("Curveball", "Knuckle Curve", "Slurve"), "Curveball",
+                                  ifelse(pbp_data$details.type.description %in% c("Fastball", "Four-Seam Fastball"), "Fastball",
+                                         ifelse(pbp_data$details.type.description %in% c("Slider", "Sweeper"), "Slider", 
+                                                ifelse(pbp_data$details.type.description %in% c("Eephus", "Knuckleball", "Slow Curve"), "Other", pbp_data$details.type.description))))
 
-pbp_data$details.type.description[pbp_data$details.type.description == "Four-Seam Fastball"] <- "Fastball"
-  
-  
+
 # setting walks as 2, hits as 1 and outs as 0
 pbp_data$hit <- ifelse(pbp_data$result.eventType %in% c("single", "double", "triple", "home_run"), 1,
                               ifelse(pbp_data$result.eventType %in% c("walk","wild_pitch"), 2, 0))
@@ -91,7 +93,7 @@ ui <- fluidPage(
            selectInput("Pitch",
                        "Pitch (last of at bat):",
                        c("All",
-                         sort(unique(as.character(last_p$details.type.description)))))
+                         sort(unique(as.character(last_p$gen_pitch_desc)))))
     ),
     column(3,
            dateRangeInput("daterange",
@@ -110,7 +112,7 @@ ui <- fluidPage(
     ),
     column(3,
            selectInput("VsPitch",
-                       "Opposing Pitcher(need to recollect data):",
+                       "Opposing Pitcher:",
                        c("All",
                          sort(unique(as.character(last_p$matchup.batter.fullName)))))
     ),
@@ -154,7 +156,7 @@ server <- function(input, output, session) {
       filtered_data <- filtered_data[filtered_data$matchup.batter.fullName == input$Batter,]
     }
     if (input$Pitch != "All") {
-      filtered_data <- filtered_data[filtered_data$details.type.description == input$Pitch,]
+      filtered_data <- filtered_data[filtered_data$gen_pitch_desc == input$Pitch,]
     }
     
     filtered_data_vs <- filtered_data # Creating a copy for hitting vs opponents
@@ -163,7 +165,7 @@ server <- function(input, output, session) {
       filtered_data_vs <- filtered_data[filtered_data$pitching_team == input$VsTeam,]
     }
     if (input$VsPitch != "All") {
-      filtered_data_vs <- filtered_data_vs #[filtered_data$details.type.description == input$Pitch,] Data needs to be collected
+      filtered_data_vs <- filtered_data_vs #[filtered_data$gen_pitch_desc == input$Pitch,] Data needs to be collected
     }
     
     
@@ -245,7 +247,7 @@ server <- function(input, output, session) {
     }
     
 
-    ggplot(filtered_data2, aes(fct_infreq(as.factor(details.type.description)), fill = matchup.pitchHand.code, weight = ..count..)) +
+    ggplot(filtered_data2, aes(fct_infreq(as.factor(gen_pitch_desc)), fill = matchup.pitchHand.code, weight = ..count..)) +
       geom_bar() +
       xlab("Pitches Seen") + ylab("Number of Pitches") + labs(fill = "Pitching Hand")
     })
@@ -343,7 +345,7 @@ swing_type <- pbp_data[pbp_data$details.call.description == "Swinging Strike"]
 
 
 hits_best <- pbp_data %>%
-  group_by(matchup.batter.fullName, matchup.pitchHand.code, details.type.description) %>%
+  group_by(matchup.batter.fullName, matchup.pitchHand.code, gen_pitch_desc) %>%
   summarize()
 
 
